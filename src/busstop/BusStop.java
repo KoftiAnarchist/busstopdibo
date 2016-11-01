@@ -14,20 +14,28 @@ import java.util.logging.Logger;
  * @author marian
  */
 public class BusStop {
+    final static boolean create = false;
     public static void main(String[] args) {
         try {
-            ReverseIndex rindex = new ReverseIndex("bustop.txt");
-            rindex.createReverseIndex();
-            rindex.sortIndex();
-            rindex.writeBinary("stadata.bin","staindex.bin");
-            
-            Tree tre = new Tree();
-            tre.createTree(rindex);
-            System.out.println("Sonuc: "+tre.findDirectPath(5L, 148L));
-            
+            if (create) {
+                ReverseIndex rindex = new ReverseIndex("bustop.txt");
+                rindex.createReverseIndex();
+                rindex.sortIndex();
+                rindex.writeBinary("stadata.bin", "staindex.bin");
+
+                Tree tre = new Tree();
+                tre.createTree(rindex);
+                tre.dumpTree("treeindex.bin", "treedata.bin");
+                System.out.println("Sonuc: " + tre.findDirectPath(5L, 148L));
+            } else {
+                Tree tre = new Tree();
+                tre.loadTree("treeindex.bin", "treedata.bin");
+                System.out.println("Sonuc: " + tre.findDirectPath(11L, 12L));
+            }
+
         } catch (IOException ex) {
             Logger.getLogger(BusStop.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-    
+
 }

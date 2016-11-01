@@ -5,10 +5,14 @@
  */
 package busstop;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -36,9 +40,15 @@ public class Tree {
         }
     }
 
-    public void dumpTree(String dataFile) throws FileNotFoundException {
-             DataOutputStream os = new DataOutputStream(new FileOutputStream(dataFile));
-             
+    public void dumpTree(String indexFile, String dataFile) throws FileNotFoundException, IOException {
+        DataOutputStream os = new DataOutputStream(new FileOutputStream(indexFile));
+        DataOutputStream os2 = new DataOutputStream(new FileOutputStream(dataFile));
+        mainbranch.writeBinary(os, os2, 0);
+    }
+
+    public void loadTree(String indexFile, String dataFile) throws FileNotFoundException, IOException {
+        DataInputStream is = new DataInputStream(new FileInputStream(indexFile));
+        mainbranch = new Branch(is, dataFile);
     }
 
     public boolean findDirectPath(long sta1, long sta2) {
@@ -60,11 +70,10 @@ public class Tree {
                                 //If the bus route queue is not important, 
                                 //then please comment the code below
                                 //and just write "return true;"
-                                if(station1.routes.get(ind1).queue > station2.routes.get(ind2).queue){
+                                if (station1.routes.get(ind1).queue > station2.routes.get(ind2).queue) {
                                     ind1++;
                                     continue;
-                                }
-                                else{
+                                } else {
                                     return true;
                                 }
                             }
@@ -93,20 +102,38 @@ public class Tree {
 
 class Branch {
 
-    final static int MAX_BRANCH_SIZE = 200;
+    final static int MAX_BRANCH_SIZE = 2;
     long min;
     long max;
+    long index;
     boolean finbranch;
     Branch subbranches[] = null;
-    HashMap<Long, StaShort> stations;
+    String dataFile;
+    boolean dataRead;
+    HashMap<Long, StaShort> stations = null;
 
     Branch(long min, long max, boolean finbranch) {
         subbranches = null;
         this.min = min;
         this.max = max;
+        index = 0;
         this.finbranch = finbranch;
         if (finbranch) {
             stations = new HashMap<>();
+        }
+    }
+
+    Branch(DataInputStream is, String dataFile) throws IOException {
+        min = is.readLong();
+        max = is.readLong();
+        finbranch = is.readBoolean();
+        index = is.readLong();
+        this.dataFile = dataFile;
+        dataRead = false;
+        if (!finbranch) {
+            subbranches = new Branch[2];
+            subbranches[0] = new Branch(is, dataFile);
+            subbranches[1] = new Branch(is, dataFile);
         }
     }
 
@@ -146,10 +173,36 @@ class Branch {
         }
     }
 
+    public void readBinaryData() throws FileNotFoundException, IOException {
+        RandomAccessFile file = new RandomAccessFile(dataFile, "r");
+        file.seek(index);
+        long stasize = file.readLong();
+        stations = new HashMap<>();
+        for (int i = 0; i < stasize; i++) {
+            long id = file.readLong();
+            long index = file.readLong();
+            stations.put(id, new StaShort(id, index));
+        }
+
+    }
+
     public StaShort getSta(long staid) {
         if (finbranch) {
-            if (stations.containsKey(staid)) {
-                return stations.get(staid);
+            if (dataRead == false && stations == null) {
+                try {
+                    readBinaryData();
+                } catch (IOException ex) {
+                    Logger.getLogger(Branch.class.getName()).log(Level.SEVERE, null, ex);
+                    System.out.println(ex.getMessage());
+                }
+                dataRead = true;
+            }
+            if (stations != null) {
+                if (stations.containsKey(staid)) {
+                    return stations.get(staid);
+                } else {
+                    return null;
+                }
             } else {
                 return null;
             }
@@ -165,6 +218,28 @@ class Branch {
         return null;
     }
 
+    public long writeBinary(DataOutputStream os, DataOutputStream os2, long index) throws IOException {
+        os.writeLong(min);
+        os.writeLong(max);
+        os.writeBoolean(finbranch);
+        if (finbranch) {
+            Iterator it = stations.entrySet().iterator();
+            os.writeLong(index);
+            os2.writeLong(stations.size());
+            index+=8;
+            while (it.hasNext()) {
+                Map.Entry pair = (Map.Entry) it.next();
+                os2.writeLong(((StaShort) pair.getValue()).id);
+                os2.writeLong(((StaShort) pair.getValue()).index);
+                index += 16;
+            }
+        } else {
+            os.writeLong(0L);
+            index = subbranches[0].writeBinary(os, os2, index);
+            index = subbranches[1].writeBinary(os, os2, index);
+        }
+        return index;
+    }
 }
 
 class StaShort {
